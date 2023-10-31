@@ -193,8 +193,9 @@ void bitonicSort(float * __restrict__ data)
                    for(;leapSize>sharedSize/2;leapSize /= 2)
                    {                                               
                         computeBox<<<(n/1024)/2,1024>>>(data,boxSize,leapSize);    
-                        cudaDeviceSynchronize();                                              											  
+                        //cudaDeviceSynchronize();                                              											  
                    }
+                   cudaDeviceSynchronize();
                    bitonicSharedMergeLeaps<<<(n/sharedSize),1024>>>(data,boxSize, leapSize);
                    cudaDeviceSynchronize();
               }
@@ -210,11 +211,30 @@ void bitonicSort(float * __restrict__ data)
      
      for(int leapSize = boxSize/2;leapSize>0;leapSize /= 2)
      {                    
-         computeBoxForward<<<(n/1024)/2,1024>>>(data,boxSize,leapSize);                 
-                                  
-     }       
+         computeBoxForward<<<(n/1024)/2,1024>>>(data,boxSize,leapSize); 
+     }
      
      cudaDeviceSynchronize();          		  
+}	
+
+void bitonicSortNoShared(float * __restrict__ data)
+{            
+     int boxSize = 2;
+     for(int i=0;i<l2n-1;i++)
+     {
+          for(int leapSize = boxSize/2;leapSize>0;leapSize /= 2)
+          {               
+               computeBox<<<(n/1024)/2,1024>>>(data,boxSize,leapSize);
+          }
+          cudaDeviceSynchronize();
+          boxSize*=2;
+     }    
+
+     for(int leapSize = boxSize/2;leapSize>0;leapSize /= 2)
+     {        
+          computeBoxForward<<<(n/1024)/2,1024>>>(data,boxSize,leapSize);
+     }
+     cudaDeviceSynchronize();
 }	
 
 #include <vector>
@@ -223,22 +243,21 @@ void bitonicSort(float * __restrict__ data)
 #include <cuda_runtime.h>
 #include <algorithm>
 #include <chrono>
+#include <stdio.h>
+#include <execution>
 
 void TestHostQuickSort(std::vector<float>& a, std::vector<float>& b)
 {
 
-     std::sort(a.begin(), a.end());
+     //std::sort(a.begin(), a.end());
 
-      for (int i = 0; i < 5; i++)
-     {
-         std::cout << a[n - 1 - i] << std::endl;
-     }
+     std::sort(std::execution::par_unseq, a.begin(), a.end());     
 
+     //  for (int i = 0; i < 5; i++)
+     // {
+     //     std::cout << a[n - 1 - i] << std::endl;
+     // }
 
-     for (int i = 0; i < n; i++)
-     {
-          a[i] = b[i];
-     }     
 }
 
 void TestDeviceBitonicSort(std::vector<float>& a)
@@ -248,33 +267,23 @@ void TestDeviceBitonicSort(std::vector<float>& a)
      float * d_a = nullptr;
 
      cudaMalloc((void**)&d_a, sizeof(float) * n);
-     err = cudaGetLastError();
-     std::cout << cudaGetErrorString(err) << std::endl;
-
      cudaMemcpy(d_a, a.data(), sizeof(float) * n, cudaMemcpyDefault);
-     err = cudaGetLastError();
-     std::cout << cudaGetErrorString(err) << std::endl;
-
      //bitonicSort<<<1, 1>>>(d_a);
-     bitonicSort(d_a);
-     err = cudaGetLastError();
-     std::cout << cudaGetErrorString(err) << std::endl;
-
+     //bitonicSort(d_a);
+     bitonicSortNoShared(d_a);
      cudaDeviceSynchronize();
-     err = cudaGetLastError();
-     std::cout << cudaGetErrorString(err) << std::endl;
 
      cudaMemcpy(a.data(), d_a, sizeof(float) * n, cudaMemcpyDefault);     
 
      err = cudaGetLastError();
      std::cout << cudaGetErrorString(err) << std::endl;
 
-     for (int i = 0; i < 5; i++)
-     {
-
-         std::cout << a[n - 1 - i] << std::endl;
-
-     }
+     //for (int i = 0; i < 5; i++)
+     //{
+//
+     //    std::cout << a[n - 1 - i] << std::endl;
+//
+     //}
 }
 
 void ValidateResult(std::vector<float>& a)
@@ -294,6 +303,9 @@ void ValidateResult(std::vector<float>& a)
 
 int main()
 {
+
+
+
      std::mt19937 mtRand(2023);
      std::uniform_int_distribution<int> dist1(-n, n);
      std::chrono::system_clock::time_point start;
@@ -304,26 +316,74 @@ int main()
      std::cout << std::fixed; 
 
      std::vector<float> a;
-     std::vector<float> b;
+     //std::vector<float> b;
+     //std::vector<float> c;
 
      a.resize(n);
-     b.resize(n);
+     //b.resize(n);
+     //c.resize(n);
 
      for (int i = 0; i < n; i++)
      {
           a[i] = dist1(mtRand);
-          b[i] = a[i];
+          //b[i] = a[i];
      }
-        
-     //start = std::chrono::system_clock::now();
-     //TestHostQuickSort(a, b);
-     //us = std::chrono::system_clock::now() - start;
-     //std::cout << "host took " << us.count() << std::endl;
+
+     //FILE* filePtr;
+//
+     //filePtr = fopen("unsorted.txt", "w+");
+     //for (int i = 0; i < n; i+=50)
+     //{
+     //     fprintf(filePtr, "%d %.2f \n", i, a[i]);
+     //}
+     //fclose(filePtr);
+
+     // start = std::chrono::system_clock::now();
+     // TestHostQuickSort(a, b);
+     // us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
+     // std::cout << "host took " << us.count() << "us" << std::endl;
+
+     // for (int i = 0; i < n; i++)
+     // {
+     //     c[i] = a[i];
+     // }     
+
+     // for (int i = 0; i < n; i++)
+     // {
+     //     a[i] = b[i];
+     // }     
+
 
      start = std::chrono::system_clock::now();
      TestDeviceBitonicSort(a);
+     
      us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-     std::cout << "device took " << us.count() << std::endl;
+     std::cout << "device took " << us.count() << "us" << std::endl;
+
+
+     //FILE* filePtr;
+
+     //filePtr = fopen("res.txt", "w+");
+     //for (int i = 0; i < n; i+=50)
+     //{
+     //     fprintf(filePtr, "%d %.2f \n", i, a[i]);
+     //}
+     //fclose(filePtr);
+
+
+     //validate
+
+     // int sum = 0;
+
+     // for (int i = 0; i < n; i++)
+     // {          
+     //      sum += abs(c[i] - a[i]);
+     // }
+     // printf("%d \n", sum);
+
+
+
+
 
 }
 

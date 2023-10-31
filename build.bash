@@ -1,3 +1,3 @@
 #!/bin/bash
 
-nvcc -rdc=true -o build/a.out bitonicSort.cu
+nvcc -std=c++17 -ltbb -O2 -rdc=true -o build/a.out bitonicSort.cu
